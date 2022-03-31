@@ -849,7 +849,6 @@ LONG NTAPI Handler(struct _EXCEPTION_POINTERS* ExceptionInfo)//异常函数
 				ExitProcess(-1);
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
-
 			return EXCEPTION_CONTINUE_SEARCH;
 		}
 	VMP_END
