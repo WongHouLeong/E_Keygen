@@ -738,11 +738,11 @@ BOOL WINAPI Init()
 #pragma endregion HookConfig
 DWORD HookAddr, ResumeAddr;
 HANDLE hProcess;
-std::string Code;
+std::string Code, Location;
 void DbgPrintf(char* pszFormat, ...)//打印输出
 {
 	VMP_BEGINU
-	char szBuf[1024];
+		char szBuf[1024];
 	va_list argList;
 	va_start(argList, pszFormat);
 	vsprintf_s(szBuf, pszFormat, argList);
@@ -818,19 +818,20 @@ LONG NTAPI Handler(struct _EXCEPTION_POINTERS* ExceptionInfo)//异常函数
 			if ((DWORD)ExceptionInfo->ExceptionRecord->ExceptionAddress == 0x006133BC)
 			{
 				std::string CommandLine = GetCommandLineA();
-				if (CommandLine.length() < 72)
+				int cmdlen = CommandLine.length() - Location.length() - 4;
+				if (cmdlen < 32)
 				{
 					DbgPrintf("ErrorKey");
 					ExitProcess(-1);
 				}
-				CommandLine = CommandLine.substr(CommandLine.length() - 72, CommandLine.length());
+				CommandLine = CommandLine.substr(Location.length() + 4, CommandLine.length());
 				DWORD WriteAdress = ExceptionInfo->ContextRecord->Eax;
 				DWORD dwOldProtect;
-				VirtualProtect((LPVOID)WriteAdress, 75, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+				VirtualProtect((LPVOID)WriteAdress, CommandLine.size() + 1, PAGE_EXECUTE_READWRITE, &dwOldProtect);
 				DbgPrintf("机器码：%s", CommandLine);
 				Code = CommandLine;
-				WriteProcessMemory(hProcess, (LPVOID)WriteAdress, CommandLine.c_str(), 72, NULL);
-				VirtualProtect((LPVOID)WriteAdress, 75, dwOldProtect, &dwOldProtect);
+				WriteProcessMemory(hProcess, (LPVOID)WriteAdress, CommandLine.c_str(), CommandLine.size() + 1, NULL);
+				VirtualProtect((LPVOID)WriteAdress, CommandLine.size() + 1, dwOldProtect, &dwOldProtect);
 				ExceptionInfo->ContextRecord->Eip = (DWORD)&Write_OriginalFunc;
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
@@ -838,7 +839,7 @@ LONG NTAPI Handler(struct _EXCEPTION_POINTERS* ExceptionInfo)//异常函数
 			{
 				DWORD ReadAdress = ExceptionInfo->ContextRecord->Eax;
 				DbgPrintf("Key：%s", ReadAdress);
-				WritePrivateProfileStringA((LPCSTR)Code.c_str(),"Key", (LPCSTR)ReadAdress, ".\\Key.ini");
+				WritePrivateProfileStringA((LPCSTR)Code.c_str(), "Key", (LPCSTR)ReadAdress, ".\\Key.ini");
 				ExitProcess(0);
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
@@ -864,6 +865,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, PVOID pvReserved)//加载
 				TCHAR szAppName[MAX_PATH] = TEXT("Keygen.dat");//请修改宿主进程名
 				TCHAR szCurName[MAX_PATH];
 				GetModuleFileName(NULL, szCurName, MAX_PATH);
+				Location = szCurName;
 				PathStripPath(szCurName);
 				//是否判断宿主进程名
 				if (StrCmpI(szCurName, szAppName) == 0)
